@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>China COVID Data Choropleth</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+      background-color: #f0f0f0;
+      min-height: 100%;
+    }
+    #title {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 15px 30px;
+      z-index: 1000;
+      font-size: 24px;
+      font-weight: bold;
+      border: 3px solid #333;
+      border-radius: 8px;
+      text-align: center;
+      letter-spacing: 1px;
+    }
+    .province-label {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 5px 10px;
+      border: 2px solid #333;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+    }
+    .legend {
+      padding: 6px 8px;
+      line-height: 18px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      border-radius: 5px;
+    }
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+<div id="title">CHINA COVID DATA 2020 CHOROPLETH</div>
+<div id="map"></div>
+<div class="province-label" id="provinceLabel"></div>
+
+<script src="https://dumplingman45.github.io/provinces.js"></script>
+<script src="https://dumplingman45.github.io/coviddata.js"></script>
+
+<script>
+  var labelEl = document.getElementById('provinceLabel');
+  
+  // Build COVID lookup
+  var covidLookup = {};
+  if (typeof covidData !== 'undefined' && covidData.features) {
+    covidData.features.forEach(function(f) {
+      covidLookup[f.properties.Location] = f.properties.covid;
+    });
+  }
+  
+  var map = L.map('map').setView([35, 104], 5);
+  
+  // Define basemap layers
+  var canvas = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 20,
+    opacity: 0.3
+  }).addTo(map);
+  
+  var imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '&copy; Esri',
+    maxZoom: 20
+  });
+  
+  function getColor(value) {
+    if (!value || value === 0) return '#f4ecf7';
+    return value > 10000 ? '#6a0dad':
+           value > 1000 ? '#9b59b6':
+           value > 500 ? '#c39bd3':
+           value > 100 ? '#e8daef':
+           '#f4ecf7';
+  }
+  
+  function getCovidValue(provinceName) {
+    if (!provinceName || typeof provinceName !== 'string') return 0;
+    
+    if (covidLookup[provinceName]) {
+      return covidLookup[provinceName];
+    }
+    
+    var lowerProvince = provinceName.toLowerCase();
+    for (var key in covidLookup) {
+      if (!key || typeof key !== 'string') continue;
+      
+      var lowerKey = key.toLowerCase();
+      if (lowerProvince.indexOf(lowerKey) >= 0 || lowerKey.indexOf(lowerProvince) >= 0) {
+        return covidLookup[key];
+      }
+    }
+    
+    return 0;
+  }
+  
+  function highlightFeature(e) {
+    var layer = e.target;
+    layer.setStyle({
+      weight: 5,
+      color: '#000000',
+      fillOpacity: 0.9
+    });
+    
+    if (layer.feature.properties && layer.feature.properties.NAME_PY) {
+      var covidValue = getCovidValue(layer.feature.properties.NAME_PY);
+      labelEl.textContent = layer.feature.properties.NAME_PY + 
+                           (covidValue > 0 ? ': ' + covidValue.toLocaleString() + ' cases' : ': No data');
+      labelEl.style.display = 'block';
+    }
+  }
+  
+  function resetHighlight(e) {
+    var layer = e.target;
+    if (layer.options.originalStyle) {
+      layer.setStyle(layer.options.originalStyle);
+    }
+    labelEl.style.display = 'none';
+  }
+  
+  map.on('mousemove', function(e) {
+    labelEl.style.left = (e.originalEvent.pageX + 15) + 'px';
+    labelEl.style.top = (e.originalEvent.pageY + 15) + 'px';
+  });
+  
+  var minValue = 100;
+  var minRadius = 5;
+  
+  function calcRadius(val) {
+    if (!val || val === 0) return minRadius;
+    return 0.9 * Math.pow(val/minValue, 0.7) * minRadius;
+  }
+  
+  // Add provinces with choropleth colors
+  var provincesLayer;
+  if (typeof provinces !== 'undefined') {
+    try {
+      provincesLayer = L.geoJson(provinces, {
+        style: function(feature) {
+          var provinceName = (feature.properties && feature.properties.NAME_PY) ? feature.properties.NAME_PY : null;
+          var covidValue = provinceName ? getCovidValue(provinceName) : 0;
+          var fillColor = getColor(covidValue);
+          
+          return {
+            fillColor: fillColor,
+            fillOpacity: 0.85,
+            color: '#333333',
+            weight: 2,
+            opacity: 1
+          };
+        },
+        onEachFeature: function(feature, layer) {
+          var provinceName = (feature.properties && feature.properties.NAME_PY) ? feature.properties.NAME_PY : null;
+          if (!provinceName) return;
+          
+          var covidValue = getCovidValue(provinceName);
+          var fillColor = getColor(covidValue);
+          
+          layer.options.originalStyle = {
+            fillColor: fillColor,
+            fillOpacity: 0.85,
+            color: '#333333',
+            weight: 2,
+            opacity: 1
+          };
+          
+          layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight
+          });
+          
+          var popup = provinceName;
+          if (covidValue > 0) {
+            popup += '<br><strong>' + covidValue.toLocaleString() + ' cases</strong>';
+          } else {
+            popup += '<br>No COVID data';
+          }
+          layer.bindPopup(popup);
+        }
+      }).addTo(map);
+    } catch(e) {
+      console.error('Province error:', e);
+    }
+  }
+  
+  // Add proportional circle markers
+  if (typeof covidData !== 'undefined' && covidData.features) {
+    L.geoJson(covidData, {
+      pointToLayer: function(feature, latlng) {
+        return L.circleMarker(latlng, {
+          color: '#000000',
+          opacity: 1,
+          weight: 2,
+          fillColor: '#FF0000',
+          fillOpacity: 0.6,
+          radius: calcRadius(feature.properties.covid)
+        });
+      },
+      onEachFeature: function(feature, layer) {
+        if (feature.properties) {
+          var prop = feature.properties;
+          var popup = '<h3>' + prop['Location'] + '</h3>' + 
+                     '<br>Cases Day 1: ' + prop['1'] + 
+                     '<br>Cases Day 16: ' + prop['covid'];
+          feature.layer = layer;
+          layer.bindPopup(popup, {maxWidth: "auto"});
+        }
+      }
+    }).addTo(map);
+  }
+  
+  // Add dynamic legend
+  var legend = L.control({position: 'bottomright'});
+  
+  legend.onAdd = function (map) {
+    var div = L.DomUtil.create('div', 'legend');
+    var grades = [0, 100, 500, 1000, 10000];
+    
+    div.innerHTML = '<b>COVID Cases</b><br><br>';
+    
+    for (var i = 0; i < grades.length; i++) {
+      div.innerHTML +=
+        '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+        grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+    }
+    
+    return div;
+  };
+  
+  legend.addTo(map);
+  
+  // Add layer control
+  var basemaps = {
+    "Light Canvas": canvas,
+    "Satellite Imagery": imagery
+  };
+  
+  var overlaymaps = {
+    "China Provinces": provincesLayer
+  };
+  
+  L.control.layers(basemaps, overlaymaps, {collapsed: false}).addTo(map);
+</script>
+</body>
+</html>
