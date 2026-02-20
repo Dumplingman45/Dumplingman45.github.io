@@ -26,25 +26,20 @@
                value === 0 ? '#ffffbf' :
                              '#b2182b';
       }
-
       var minValue = 1;
       var minRadius = 4;
-
       function calcRadius(val) {
         return 1.0083 * Math.pow(Number(val) / minValue, .5716) * minRadius;
       }
-
       var background = L.tileLayer(
         'https://stamen-tiles-{s}.a.ssl.fastly.net/toner-background/{z}/{x}/{y}{r}.{ext}',
         { attribution: '', subdomains: 'abcd', minZoom: 0, maxZoom: 20, ext: 'png' }
       );
-
       var map = L.map("map", {
         layers: [background],
         center: new L.LatLng(38, -95),
         zoom: 4
       });
-
       function updateList(timeline) {
         var displayed = timeline.getLayers();
         var list = document.getElementById("displayed-list");
@@ -57,48 +52,53 @@
           list.appendChild(li);
         });
       }
-
-      function onLoadData(data) {
-        var getInterval = function (elec) {
-          return { start: elec.properties.start, end: elec.properties.end };
-        };
-
-        var timelineControl = L.timelineSliderControl({
-          formatOutput: function (date) { return new Date(date).toString(); },
-        });
-
-        var timeline = L.timeline(data, {
-          getInterval: getInterval,
-          pointToLayer: function (feature, latlng) {
-            return L.circleMarker(latlng, {
-              radius: calcRadius(feature.properties.EV_EV),
-              color: getColorFor(feature.properties.DIFF),
-              fillColor: getColorFor(feature.properties.DIFF),
-              fillOpacity: 0.8
-            }).bindPopup('<p>Electoral votes: ' + feature.properties.EV_EV + '</p>');
-          },
-        });
-
-        timelineControl.addTo(map);
-        timelineControl.addTimelines(timeline);
-        timeline.addTo(map);
-        timeline.on("change", function (e) { updateList(e.target); });
-        updateList(timeline);
-      }
-
-      // Fetch the file as text, strip the JSONP wrapper "onLoadData(...)" then parse as JSON
       fetch('https://raw.githubusercontent.com/Dumplingman45/Dumplingman45.github.io/main/Drivemytruckdrinkmybeer.json')
         .then(function(response) { return response.text(); })
         .then(function(text) {
-          // Strip the JSONP wrapper: remove "onLoadData(" from start and ")" from end
           var stripped = text.trim();
           if (stripped.startsWith('onLoadData(')) {
-            stripped = stripped.slice('onLoadData('.length, -1);
+            stripped = stripped.slice(11);
+            if (stripped.endsWith(')')) {
+              stripped = stripped.slice(0, -1);
+            }
           }
-          var data = JSON.parse(stripped);
-          onLoadData(data);
+          return JSON.parse(stripped);
         })
-        .catch(function(err) { console.error('Failed to load data:', err); });
+        .then(function(data) {
+          var getInterval = function (elec) {
+            return { start: elec.properties.start, end: elec.properties.end };
+          };
+          var timelineControl = L.timelineSliderControl({
+            formatOutput: function (date) { return new Date(date).toString(); },
+          });
+          var timeline = L.timeline(data, {
+            getInterval: getInterval,
+            style: function(feature) {
+              return {
+                fillColor: getColorFor(feature.properties.DIFF),
+                fillOpacity: 0.8,
+                color: '#333',
+                weight: 1
+              };
+            },
+            pointToLayer: function (feature, latlng) {
+              return L.circleMarker(latlng, {
+                radius: calcRadius(feature.properties.EV_EV),
+                color: getColorFor(feature.properties.DIFF),
+                fillColor: getColorFor(feature.properties.DIFF),
+                fillOpacity: 0.8
+              }).bindPopup('<p>Electoral votes: ' + feature.properties.EV_EV + '</p>');
+            },
+          });
+          timelineControl.addTo(map);
+          timelineControl.addTimelines(timeline);
+          timeline.addTo(map);
+          timeline.on("change", function (e) { updateList(e.target); });
+          updateList(timeline);
+        })
+        .catch(function(err) {
+          document.getElementById("displayed-list").innerHTML = '<li style="color:red">Error: ' + err.message + '</li>';
+        });
     </script>
   </body>
 </html>
