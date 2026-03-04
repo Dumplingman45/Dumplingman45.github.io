@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Lab 7 part 2</title>
+
+  <!-- Leaflet CSS: provides default map and marker styles -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css"
+    integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA=="
+    crossorigin=""/>
+
+  <!-- Leaflet JS: core mapping library -->
+  <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"
+    integrity="sha512-nMMmRyTVoLYqjP9hrbed9S+FzjZHW5gY1TWCHA5ckwXZBadntCNs8kEqAWdrb9O7rxbCaA4lKTIWjDXZxflOcA=="
+    crossorigin=""></script>
+
+  <!-- jQuery: used for AJAX requests (e.g. getJSON) and DOM manipulation -->
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"
+    integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+    crossorigin="anonymous"></script>
+
+  <!-- jQuery UI: provides the slider widget used in the time UI -->
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"
+    integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="
+    crossorigin="anonymous"></script>
+
+  <!-- Fuse.js: fuzzy search library used by the Leaflet search plugin -->
+  <script src="https://dsps.lib.uiowa.edu/placing/public/fuse-1.2.1/fuse.min.js"></script>
+
+  <!-- Leaflet Fuse Search JS: adds a search box to the map using Fuse.js -->
+  <script src="https://dsps.lib.uiowa.edu/placing/public/leafletFuseSearch-noVersion/leafletfuse.js"></script>
+
+  <!-- Leaflet Fuse Search CSS: styles for the search box control -->
+  <link rel="stylesheet" href="https://dsps.lib.uiowa.edu/placing/public/leafletFuseSearch-noVersion/leafletfuse.css"
+    type="text/css"/>
+
+  <style>
+    /* Make the map fill the entire browser window */
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { min-height: 100%; }
+
+    /* Style the range slider control */
+    .range-slider {
+      width: 200px;
+      display: block;
+    }
+
+    /* Style the temporal legend label beneath the slider */
+    .temporal-legend {
+      display: block;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      background: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- The div that Leaflet will render the map into -->
+  <div id="map"></div>
+
+  <script>
+
+    // Initialize the Leaflet map centered on the contiguous US
+    var map = L.map('map', {
+      center: [38.1625228, -96.9633171],
+      zoom: 4
+    });
+
+    // Add the CartoDB Positron tile layer as the base map
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      minZoom: 0,
+      maxZoom: 19
+    }).addTo(map);
+
+    // Complete dataset: top 15 US cities with population data for every decade 1950–2020
+    // Historical data (1950–2010) from US Census Bureau decennial records
+    // 2020 data from your provided GeoJSON
+    var cityData = {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: { name: "New York",     "1950": 7891957, "1960": 7781984, "1970": 7895563, "1980": 7071639, "1990": 7322564, "2000": 8008278, "2010": 8175133, "2020": 8804190 }, geometry: { type: "Point", coordinates: [ -74.0060,   40.7128 ] } },
+        { type: "Feature", properties: { name: "Los Angeles",  "1950": 1970358, "1960": 2479015, "1970": 2816061, "1980": 2966850, "1990": 3485398, "2000": 3694820, "2010": 3792621, "2020": 3898747 }, geometry: { type: "Point", coordinates: [ -118.2437,  34.0522 ] } },
+        { type: "Feature", properties: { name: "Chicago",      "1950": 3620962, "1960": 3550404, "1970": 3366957, "1980": 3005072, "1990": 2783726, "2000": 2896016, "2010": 2695598, "2020": 2746388 }, geometry: { type: "Point", coordinates: [ -87.6298,   41.8781 ] } },
+        { type: "Feature", properties: { name: "Houston",      "1950":  596163, "1960":  938219, "1970": 1232802, "1980": 1595138, "1990": 1630553, "2000": 1953631, "2010": 2099451, "2020": 2304580 }, geometry: { type: "Point", coordinates: [ -95.3698,   29.7604 ] } },
+        { type: "Feature", properties: { name: "Phoenix",      "1950":  106818, "1960":  439170, "1970":  581562, "1980":  789704, "1990": 1006970, "2000": 1321045, "2010": 1445632, "2020": 1608139 }, geometry: { type: "Point", coordinates: [ -112.0740,  33.4484 ] } },
+        { type: "Feature", properties: { name: "Philadelphia", "1950": 2071605, "1960": 2002512, "1970": 1948609, "1980": 1688210, "1990": 1585577, "2000": 1517550, "2010": 1526006, "2020": 1603797 }, geometry: { type: "Point", coordinates: [ -75.1652,   39.9526 ] } },
+        { type: "Feature", properties: { name: "San Antonio",  "1950":  408442, "1960":  587718, "1970":  654153, "1980":  785880, "1990":  935933, "2000": 1144646, "2010": 1327407, "2020": 1434625 }, geometry: { type: "Point", coordinates: [ -98.4936,   29.4241 ] } },
+        { type: "Feature", properties: { name: "San Diego",    "1950":  333865, "1960":  573224, "1970":  696769, "1980":  875538, "1990": 1110549, "2000": 1223400, "2010": 1307402, "2020": 1386932 }, geometry: { type: "Point", coordinates: [ -117.1611,  32.7157 ] } },
+        { type: "Feature", properties: { name: "Dallas",       "1950":  434462, "1960":  679684, "1970":  844401, "1980":  904078, "1990": 1006877, "2000": 1188580, "2010": 1197816, "2020": 1304379 }, geometry: { type: "Point", coordinates: [ -96.7970,   32.7767 ] } },
+        { type: "Feature", properties: { name: "Jacksonville", "1950":  204517, "1960":  201030, "1970":  528865, "1980":  540920, "1990":  635230, "2000":  735617, "2010":  821784, "2020":  949611 }, geometry: { type: "Point", coordinates: [ -81.6557,   30.3322 ] } },
+        { type: "Feature", properties: { name: "Fort Worth",   "1950":  278778, "1960":  356268, "1970":  393476, "1980":  385164, "1990":  447619, "2000":  534694, "2010":  741206, "2020":  918915 }, geometry: { type: "Point", coordinates: [ -97.3308,   32.7555 ] } },
+        { type: "Feature", properties: { name: "San Jose",     "1950":   95280, "1960":  204196, "1970":  459913, "1980":  629442, "1990":  782248, "2000":  894943, "2010":  945942, "2020": 1013240 }, geometry: { type: "Point", coordinates: [ -121.8863,  37.3382 ] } },
+        { type: "Feature", properties: { name: "Austin",       "1950":  132459, "1960":  186545, "1970":  253539, "1980":  345496, "1990":  465622, "2000":  656562, "2010":  790390, "2020":  961855 }, geometry: { type: "Point", coordinates: [ -97.7431,   30.2672 ] } },
+        { type: "Feature", properties: { name: "Charlotte",    "1950":  134042, "1960":  201564, "1970":  241178, "1980":  314447, "1990":  395934, "2000":  540828, "2010":  731424, "2020":  874579 }, geometry: { type: "Point", coordinates: [ -80.8431,   35.2271 ] } },
+        { type: "Feature", properties: { name: "Columbus",     "1950":  375901, "1960":  471316, "1970":  539677, "1980":  564871, "1990":  632910, "2000":  711470, "2010":  787033, "2020":  905748 }, geometry: { type: "Point", coordinates: [ -82.9988,   39.9612 ] } }
+      ]
+    };
+
+    // Process the inline data directly — no external fetch needed
+    var info = processData(cityData);
+    createPropSymbols(info.timestamps, cityData);
+    createSliderUI(info.timestamps);
+    createSearchControl(cityData);
+
+    // Create and add a Fuse.js fuzzy search control that searches cities by name
+    function createSearchControl(data) {
+
+      // Build a separate GeoJSON layer used exclusively by the search control
+      var searchLayer = L.geoJson(data, {
+        pointToLayer: function(feature, latlng) {
+          return L.circleMarker(latlng, {
+            fillColor: "#f90",    // Orange fill to distinguish search results
+            color: "#c60",        // Darker orange border
+            weight: 2,
+            fillOpacity: 0.8
+          });
+        },
+        onEachFeature: function(feature, layer) {
+          // Bind a popup to each search result marker showing city name
+          layer.bindPopup('<strong>' + feature.properties.name + '</strong>');
+          feature.layer = layer; // Required by leafletfuse to locate the feature on the map
+        }
+      });
+
+      // Configuration options for the Fuse fuzzy search control
+      var searchOptions = {
+        position: 'topright',             // Place the search box in the top-right corner
+        title: 'Search Cities',           // Title shown above the search box
+        placeholder: 'Example: Chicago', // Placeholder text inside the input field
+        maxResultLength: 15,              // Show all 15 cities in results if needed
+        caseSensitive: false,             // Ignore case when matching search terms
+        showInvisibleFeatures: true,      // Include all cities regardless of map view
+        layerToToggle: searchLayer,       // The layer to show when a result is selected
+        threshold: 0.4,                   // Fuse.js match sensitivity (lower = stricter)
+
+        // Defines how each search result is rendered in the dropdown list
+        showResultFct: function(feature, container) {
+          var props = feature.properties;
+
+          // Display city name in bold
+          var name = L.DomUtil.create('b', null, container);
+          name.innerHTML = props.name;
+        }
+      };
+
+      // Create the search control and add it to the map
+      var searchControl = L.control.fuseSearch(searchOptions);
+      map.addControl(searchControl);
+
+      // Index the city features by the "name" property so they are searchable
+      searchControl.indexFeatures(data.features, ['name']);
+    }
+
+    // Inspect each feature's properties to extract all numeric year-based keys as timestamps
+    function processData(data) {
+      var timestamps = [];
+
+      data.features.forEach(function(feature) {
+        var props = feature.properties;
+
+        // Any property key that is a 4-digit year is treated as a timestamp
+        Object.keys(props).forEach(function(key) {
+          if (!isNaN(key) && timestamps.indexOf(key) === -1) {
+            timestamps.push(key);
+          }
+        });
+      });
+
+      // Sort timestamps chronologically
+      timestamps.sort();
+
+      return { timestamps: timestamps };
+    }
+
+    // Create circle markers for each GeoJSON point and add them to the map
+    function createPropSymbols(timestamps, data) {
+      cities = L.geoJson(data, {
+        // pointToLayer overrides the default pin marker with a circle marker
+        pointToLayer: function(feature, latlng) {
+
+          return L.circleMarker(latlng, {
+            fillColor: "#501e65", // Fill color of the circles
+            color: '#501e65',     // Border color of the circles
+            weight: 2,            // Circle border width in pixels
+            fillOpacity: 0.5      // Fill opacity (0 = transparent, 1 = solid)
+          }).on({
+
+            // Highlight circle green and open popup on mouseover
+            mouseover: function(e) {
+              this.openPopup();
+              this.setStyle({ fillColor: 'green' });
+            },
+
+            // Revert circle color and close popup on mouseout
+            mouseout: function(e) {
+              this.closePopup();
+              this.setStyle({ fillColor: '#501e65' });
+            }
+
+          });
+        }
+      }).addTo(map);
+
+      // Display proportional symbols using the first timestamp on load
+      updatePropSymbols(timestamps[0]);
+    }
+
+    // Build the time slider UI control and attach it to the map
+    function createSliderUI(timestamps) {
+
+      // Create a Leaflet control element positioned in the bottom-left of the map
+      var sliderControl = L.control({ position: 'bottomleft' });
+
+      sliderControl.onAdd = function(map) {
+
+        // Create an <input> element with the class "range-slider" using Leaflet's DOM utility
+        var slider = L.DomUtil.create("input", "range-slider");
+
+        // Prevent map click events from firing when the user clicks the slider
+        L.DomEvent.addListener(slider, 'mousedown', function(e) {
+          L.DomEvent.stopPropagation(e);
+        });
+
+        $(slider)
+          .attr({
+            'type': 'range',
+            'max': timestamps.length - 1, // Index-based max (0–7 for 8 decades)
+            'min': 0,
+            'step': 1,
+            'value': 0                    // Start at the first timestamp (1950)
+          })
+          .on('input change', function() {
+            // Update proportional symbols and legend label when the slider moves
+            var i = parseInt($(this).val());
+            updatePropSymbols(timestamps[i]);
+            $(".temporal-legend").text(timestamps[i]);
+          })
+          .mousedown(function() {
+            // Disable map dragging while the user is interacting with the slider
+            map.dragging.disable();
+          })
+          .mouseup(function() {
+            // Re-enable map dragging once the user releases the slider
+            map.dragging.enable();
+          });
+
+        // Also re-enable dragging if the mouse is released anywhere on the document
+        $(document).mouseup(function() {
+          map.dragging.enable();
+        });
+
+        return slider;
+      };
+
+      // Add the slider control to the map
+      sliderControl.addTo(map);
+
+      // Initialize the temporal legend label with the first timestamp
+      createTimeLabel(timestamps[0]);
+    }
+
+    // Add a text label beneath the slider showing the currently selected year
+    function createTimeLabel(startTimestamp) {
+
+      // Create a Leaflet control in the same bottom-left position as the slider
+      var temporalLegend = L.control({ position: 'bottomleft' });
+
+      temporalLegend.onAdd = function(map) {
+        var output = L.DomUtil.create("output", "temporal-legend");
+        $(output).text(startTimestamp); // Set the initial label to the first timestamp
+        return output;
+      };
+
+      temporalLegend.addTo(map);
+    }
+
+    // Update and resize each circle marker according to its value at the given timestamp
+    function updatePropSymbols(timestamp) {
+
+      cities.eachLayer(function(layer) {
+
+        var props = layer.feature.properties; // Get the attributes for this feature
+
+        // Calculate the circle radius based on the population value at this timestamp
+        var radius = calcPropRadius(props[timestamp]);
+
+        // Build the popup showing city name, selected year, and formatted population
+        var popupContent = '<strong>' + props.name + '</strong><br>' +
+          timestamp + ' Population: ' + Number(props[timestamp]).toLocaleString();
+
+        layer.setRadius(radius); // Update the circle's radius
+
+        // Bind the popup with a vertical offset so it appears above the circle
+        layer.bindPopup(popupContent, { offset: new L.Point(0, -radius) });
+
+      });
+    }
+
+    // Calculate the radius of a proportional symbol based on its attribute value
+    function calcPropRadius(attributeValue) {
+
+      // Scale factor converts raw population values to a visible radius in pixels
+      var scaleFactor = 0.001;
+
+      var area = attributeValue * scaleFactor;
+
+      // Derive radius from area using the circle area formula (A = πr²), solved for r
+      return Math.sqrt(area / Math.PI);
+    }
+
+  </script>
+</body>
+</html>
