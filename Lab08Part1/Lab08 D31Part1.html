@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>D3 Map</title>
+
+<style>
+body { 
+    position: absolute;
+    font-family: "Proxima Nova", "Montserrat", sans-serif;
+}
+
+h1, h2 {
+    position: absolute;
+    background: white;
+    left: 10px;
+    font-size: 1.3em;
+    font-weight: 100;
+}
+
+h2 {
+    top: 30px;
+    font-size: 1em;
+}
+
+.hover {
+    fill: yellow;
+}
+
+/* Bandcamp section */
+#music {
+    position: absolute;
+    bottom: 0;
+    left: 10px;
+    background: white;
+    padding: 10px;
+}
+</style>
+
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://rshepard2.github.io/Lab9/data/lnkrds.js"></script>
+<script src="https://rshepard2.github.io/Lab9/data/northeast_lnk_blds.js"></script>
+
+</head>
+
+<body>
+
+<h1>Aging Northeast Lincoln Homes</h1>
+<h2></h2>
+
+<script>
+
+// Color ramp
+var minVal = 1900;
+var maxVal = 2020;
+var lowColor = "#ffffcc";
+var highColor = "#800026";
+
+var ramp = d3.scaleLinear()
+    .domain([minVal, maxVal])
+    .range([lowColor, highColor]);
+
+var width = 1000;
+var height = 600;
+
+// SVG
+var svg = d3.select("body")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+// ✅ Group for zooming (IMPORTANT)
+var zoomGroup = svg.append("g");
+
+// Layers inside zoom group
+var g = zoomGroup.append("g");
+var lnk_json = zoomGroup.append("g");
+
+// Projection
+var albersProjection = d3.geoAlbers()
+    .scale(2850000)
+    .rotate([96.6327, 0])
+    .center([0, 40.8497493])
+    .translate([width / 2, height / 2]);
+
+var geoPath = d3.geoPath()
+    .projection(albersProjection);
+
+// Base map (outline only)
+g.selectAll("path")
+    .data(lnkrds.features)
+    .enter()
+    .append("path")
+    .attr("fill", "none")
+    .attr("stroke", "#999")
+    .attr("stroke-width", 0.5)
+    .attr("d", geoPath);
+
+// Buildings
+lnk_json.selectAll("path")
+    .data(lnkbldngsjson.features)
+    .enter()
+    .append("path")
+    .attr("fill", function(d) { return ramp(d.properties.RESYRBLT); })
+    .attr("stroke", "#999")
+    .attr("d", geoPath)
+    .attr("class", "buildingdata")
+    .on("mouseover", function(d) {
+        d3.select("h2").text("Built in " + d.properties.RESYRBLT);
+        d3.select(this).attr("class", "buildingdata hover");
+    })
+    .on("mouseout", function(d) {
+        d3.select("h2").text("");
+        d3.select(this).attr("class", "buildingdata");
+    });
+
+// ✅ ZOOM FUNCTIONALITY
+var zoom = d3.zoom()
+    .scaleExtent([1, 8]) // min/max zoom
+    .on("zoom", function() {
+        zoomGroup.attr("transform", d3.event.transform);
+    });
+
+// Apply zoom to SVG
+svg.call(zoom);
+
+</script>
+
+<div id="music">
+    <img src="https://i.imgur.com/umInqPW.jpg" alt="Image 1" style="width:120px; display:inline-block; margin-right:6px;">
+    <img src="https://i.imgur.com/kJLKEB6.jpg" alt="Image 2" style="width:120px; display:inline-block; margin-right:6px;">
+    <img src="https://i.imgur.com/zoDRrCO.jpg" alt="Image 3" style="width:120px; display:inline-block;">
+
+    <iframe style="border: 0; width: 500px; height: 200px;"
+        src="https://bandcamp.com/dumplingman/playlist/prairie-songs"
+        seamless>
+    </iframe>
+</div>
+
+</body>
+</html>
